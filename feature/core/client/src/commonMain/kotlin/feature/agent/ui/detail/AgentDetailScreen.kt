@@ -1,6 +1,7 @@
 package feature.agent.ui.detail
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.mikepenz.markdown.m3.Markdown
 import dev.enro.annotations.NavigationDestination
 import feature.agent.domain.AgentOutput
 import feature.agent.domain.AgentStatus
@@ -95,18 +97,20 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
                 )
             }
 
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                val visibleOutput = if (state.showFullOutput) {
-                    state.output
-                } else {
-                    state.output.filterIsInstance<AgentOutput.Text>()
-                }
-                items(visibleOutput) { output ->
-                    OutputItem(output)
+            SelectionContainer {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    val visibleOutput = if (state.showFullOutput) {
+                        state.output
+                    } else {
+                        state.output.filterIsInstance<AgentOutput.Text>()
+                    }
+                    items(visibleOutput) { output ->
+                        OutputItem(output)
+                    }
                 }
             }
 
@@ -145,11 +149,17 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
 private fun OutputItem(output: AgentOutput) {
     when (output) {
         is AgentOutput.Text -> {
-            Text(
-                text = output.content,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(vertical = 2.dp),
-            )
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Markdown(
+                    content = output.content,
+                    modifier = Modifier.padding(8.dp),
+                )
+            }
         }
         is AgentOutput.Thinking -> {
             Card(

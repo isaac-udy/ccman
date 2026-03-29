@@ -29,6 +29,8 @@ kotlin {
 
             implementation(libs.enro.core)
             implementation(libs.udytils.ui)
+            implementation(libs.markdown.renderer)
+            implementation(libs.markdown.renderer.m3)
             api(libs.koin.core)
             implementation(libs.koin.compose)
             implementation(libs.koin.composeViewmodel)

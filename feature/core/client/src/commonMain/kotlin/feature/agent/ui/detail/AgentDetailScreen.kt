@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.mikepenz.markdown.m3.Markdown
 import dev.enro.annotations.NavigationDestination
 import feature.agent.domain.AgentOutput
 import feature.agent.domain.AgentStatus
@@ -171,7 +170,7 @@ private fun OutputItemContent(output: AgentOutput) {
                 ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Markdown(
+                AgentOutputMarkdown(
                     content = output.content,
                     modifier = Modifier.padding(8.dp),
                 )
@@ -254,7 +253,7 @@ private fun OutputItemContent(output: AgentOutput) {
                 ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Markdown(
+                AgentOutputMarkdown(
                     content = output.content,
                     modifier = Modifier.padding(8.dp),
                 )

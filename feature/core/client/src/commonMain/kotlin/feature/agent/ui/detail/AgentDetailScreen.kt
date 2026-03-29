@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -52,6 +53,11 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text(state.agent?.name ?: "Agent") },
+                navigationIcon = {
+                    IconButton(onClick = viewModel::onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
                 actions = {
                     IconButton(onClick = viewModel::onEditAgent) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit Agent")

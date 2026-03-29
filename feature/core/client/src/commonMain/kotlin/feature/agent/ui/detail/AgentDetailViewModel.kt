@@ -2,6 +2,7 @@ package feature.agent.ui.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.enro.close
 import dev.enro.navigationHandle
 import dev.enro.open
 import dev.isaacudy.udytils.state.ViewModelState
@@ -66,6 +67,10 @@ class AgentDetailViewModel(
         viewModelScope.launch {
             stopAgentTask(agentId)
         }
+    }
+
+    fun onBack() {
+        navigation.close()
     }
 
     fun onEditAgent() {

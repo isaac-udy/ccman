@@ -192,5 +192,5 @@ private fun parseToolUseBlock(block: JsonObject): AgentOutput.ToolUse? {
 private fun parseResultMessage(json: JsonObject): List<AgentOutput> {
     val result = json["result"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
     if (result.isBlank()) return emptyList()
-    return listOf(AgentOutput.Text(result, rawJson = json.toString()))
+    return listOf(AgentOutput.Result(result, rawJson = json.toString()))
 }

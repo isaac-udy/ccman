@@ -107,7 +107,7 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
                     val visibleOutput = if (state.showFullOutput) {
                         state.output
                     } else {
-                        state.output.filterIsInstance<AgentOutput.Text>()
+                        state.output.filter { it is AgentOutput.Text || it is AgentOutput.Result }
                     }
                     items(visibleOutput) { output ->
                         OutputItem(output, showRawJson = state.showFullOutput)
@@ -245,6 +245,19 @@ private fun OutputItemContent(output: AgentOutput) {
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
                 }
+            }
+        }
+        is AgentOutput.Result -> {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Markdown(
+                    content = output.content,
+                    modifier = Modifier.padding(8.dp),
+                )
             }
         }
         is AgentOutput.Unknown -> {

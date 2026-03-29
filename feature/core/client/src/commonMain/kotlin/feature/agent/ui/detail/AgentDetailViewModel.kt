@@ -8,13 +8,13 @@ import dev.enro.open
 import dev.isaacudy.udytils.state.ViewModelState
 import dev.isaacudy.udytils.state.viewModelState
 import feature.agent.domain.Agent
+import feature.agent.domain.AgentOutput
 import feature.agent.domain.FlowOfAgentOutput
 import feature.agent.domain.FlowOfAgentState
 import feature.agent.domain.FlowOfAgents
 import feature.agent.domain.SendAgentTask
 import feature.agent.domain.StopAgentTask
 import feature.agent.ui.edit.AgentEditDestination
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class AgentDetailViewModel(
@@ -45,7 +45,7 @@ class AgentDetailViewModel(
         }
         viewModelScope.launch {
             flowOfAgentOutput(agentId).collect { output ->
-                state.update { copy(output = output) }
+                state.update { copy(output = deduplicateOutput(output)) }
             }
         }
     }
@@ -79,5 +79,16 @@ class AgentDetailViewModel(
 
     fun onToggleOutputDetail() {
         state.update { copy(showFullOutput = !showFullOutput) }
+    }
+}
+
+private fun deduplicateOutput(output: List<AgentOutput>): List<AgentOutput> {
+    return output.filterIndexed { index, item ->
+        if (item is AgentOutput.Result && index > 0) {
+            val previous = output[index - 1]
+            !(previous is AgentOutput.Text && previous.content == item.content)
+        } else {
+            true
+        }
     }
 }

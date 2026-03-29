@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -72,10 +73,11 @@ internal class AgentRepository(
                     workingDirectory = agent.workingDirectory,
                     prompt = prompt,
                 ).collect { line ->
-                    val event = parseClaudeEvent(line) ?: return@collect
+                    val events = parseClaudeEvents(line)
+                    if (events.isEmpty()) return@collect
                     agentOutputs.update { current ->
                         val existing = current[agentId] ?: emptyList()
-                        current + (agentId to (existing + event))
+                        current + (agentId to (existing + events))
                     }
                 }
                 agentStatuses.update { it + (agentId to AgentStatus.Idle) }
@@ -105,36 +107,59 @@ private fun Agent.toEntity(): AgentConfigEntity = AgentConfigEntity(
 
 private val lenientJson = Json { ignoreUnknownKeys = true }
 
-private fun parseClaudeEvent(jsonLine: String): AgentOutput? {
+private fun parseClaudeEvents(jsonLine: String): List<AgentOutput> {
     val line = jsonLine.trim()
-    if (line.isEmpty()) return null
+    if (line.isEmpty()) return emptyList()
 
     val json = try {
         lenientJson.parseToJsonElement(line).jsonObject
     } catch (_: Throwable) {
-        return null
+        return emptyList()
     }
 
-    val type = json["type"]?.jsonPrimitive?.contentOrNull ?: return null
+    val type = json["type"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
 
     return when (type) {
         "assistant" -> parseAssistantMessage(json)
         "result" -> parseResultMessage(json)
-        else -> null
+        else -> emptyList()
     }
 }
 
-private fun parseAssistantMessage(json: JsonObject): AgentOutput? {
-    val message = json["message"]?.jsonObject ?: return null
+private fun parseAssistantMessage(json: JsonObject): List<AgentOutput> {
+    val message = json["message"]?.jsonObject ?: return emptyList()
     val role = message["role"]?.jsonPrimitive?.contentOrNull
-    if (role != "assistant") return null
+    if (role != "assistant") return emptyList()
 
-    val content = message["content"]?.toString() ?: return null
-    return AgentOutput.Text(content)
+    val contentArray = try {
+        message["content"]?.jsonArray ?: return emptyList()
+    } catch (_: Throwable) {
+        return emptyList()
+    }
+
+    return contentArray.mapNotNull { element ->
+        val block = try {
+            element.jsonObject
+        } catch (_: Throwable) {
+            return@mapNotNull null
+        }
+        val blockType = block["type"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+        when (blockType) {
+            "text" -> {
+                val text = block["text"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                if (text.isNotBlank()) AgentOutput.Text(text) else null
+            }
+            "thinking" -> {
+                val thinking = block["thinking"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                if (thinking.isNotBlank()) AgentOutput.Thinking(thinking) else null
+            }
+            else -> AgentOutput.Unknown(type = blockType, rawJson = block.toString())
+        }
+    }
 }
 
-private fun parseResultMessage(json: JsonObject): AgentOutput? {
-    val result = json["result"]?.jsonPrimitive?.contentOrNull ?: return null
-    if (result.isBlank()) return null
-    return AgentOutput.Text(result)
+private fun parseResultMessage(json: JsonObject): List<AgentOutput> {
+    val result = json["result"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
+    if (result.isBlank()) return emptyList()
+    return listOf(AgentOutput.Text(result))
 }

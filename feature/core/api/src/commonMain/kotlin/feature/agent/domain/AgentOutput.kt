@@ -4,18 +4,25 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 sealed interface AgentOutput {
-    @Serializable
-    data class Text(val content: String) : AgentOutput
+    val rawJson: String
 
     @Serializable
-    data class Thinking(val content: String) : AgentOutput
+    data class Text(val content: String, override val rawJson: String) : AgentOutput
 
     @Serializable
-    data class ToolUse(val name: String, val input: String) : AgentOutput
+    data class Thinking(val content: String, override val rawJson: String) : AgentOutput
 
     @Serializable
-    data class ToolResult(val name: String, val output: String) : AgentOutput
+    data class ToolUse(
+        val name: String,
+        val command: String,
+        val description: String?,
+        override val rawJson: String,
+    ) : AgentOutput
 
     @Serializable
-    data class Unknown(val type: String, val rawJson: String) : AgentOutput
+    data class ToolResult(val name: String, val output: String, override val rawJson: String) : AgentOutput
+
+    @Serializable
+    data class Unknown(val type: String, override val rawJson: String) : AgentOutput
 }

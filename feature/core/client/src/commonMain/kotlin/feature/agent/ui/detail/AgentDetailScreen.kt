@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
 import dev.enro.annotations.NavigationDestination
@@ -109,7 +110,7 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
                         state.output.filterIsInstance<AgentOutput.Text>()
                     }
                     items(visibleOutput) { output ->
-                        OutputItem(output)
+                        OutputItem(output, showRawJson = state.showFullOutput)
                     }
                 }
             }
@@ -146,7 +147,22 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
 }
 
 @Composable
-private fun OutputItem(output: AgentOutput) {
+private fun OutputItem(output: AgentOutput, showRawJson: Boolean) {
+    Column {
+        OutputItemContent(output)
+        if (showRawJson) {
+            Text(
+                text = output.rawJson,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OutputItemContent(output: AgentOutput) {
     when (output) {
         is AgentOutput.Text -> {
             Card(
@@ -170,9 +186,10 @@ private fun OutputItem(output: AgentOutput) {
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text(
-                        text = "Thinking...",
+                        text = "Thinking",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
                     )
                     Text(
                         text = output.content,
@@ -191,12 +208,18 @@ private fun OutputItem(output: AgentOutput) {
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text(
-                        text = "Tool: ${output.name}",
+                        text = "Tool",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = output.name + if (output.description != null) " - ${output.description}" else "",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                     Text(
-                        text = output.input,
+                        text = output.command,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )

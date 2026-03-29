@@ -144,22 +144,53 @@ private fun parseAssistantMessage(json: JsonObject): List<AgentOutput> {
             return@mapNotNull null
         }
         val blockType = block["type"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+        val raw = block.toString()
         when (blockType) {
             "text" -> {
                 val text = block["text"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                if (text.isNotBlank()) AgentOutput.Text(text) else null
+                if (text.isNotBlank()) AgentOutput.Text(text, rawJson = raw) else null
             }
             "thinking" -> {
                 val thinking = block["thinking"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                if (thinking.isNotBlank()) AgentOutput.Thinking(thinking) else null
+                if (thinking.isNotBlank()) AgentOutput.Thinking(thinking, rawJson = raw) else null
             }
-            else -> AgentOutput.Unknown(type = blockType, rawJson = block.toString())
+            "tool_use" -> parseToolUseBlock(block)
+            else -> AgentOutput.Unknown(type = blockType, rawJson = raw)
         }
     }
+}
+
+private fun parseToolUseBlock(block: JsonObject): AgentOutput.ToolUse? {
+    val name = block["name"]?.jsonPrimitive?.contentOrNull ?: return null
+    val input = try {
+        block["input"]?.jsonObject
+    } catch (_: Throwable) {
+        null
+    }
+
+    val description = input?.get("description")?.jsonPrimitive?.contentOrNull
+
+    val command = if (input != null) {
+        val commandValue = input["command"]?.jsonPrimitive?.contentOrNull
+        if (commandValue != null && input.keys.all { it == "command" || it == "description" }) {
+            commandValue
+        } else {
+            input.toString()
+        }
+    } else {
+        block["input"]?.toString() ?: ""
+    }
+
+    return AgentOutput.ToolUse(
+        name = name,
+        command = command,
+        description = description,
+        rawJson = block.toString(),
+    )
 }
 
 private fun parseResultMessage(json: JsonObject): List<AgentOutput> {
     val result = json["result"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
     if (result.isBlank()) return emptyList()
-    return listOf(AgentOutput.Text(result))
+    return listOf(AgentOutput.Text(result, rawJson = json.toString()))
 }

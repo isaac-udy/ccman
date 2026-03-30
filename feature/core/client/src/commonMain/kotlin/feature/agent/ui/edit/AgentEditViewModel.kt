@@ -35,6 +35,7 @@ class AgentEditViewModel(
                             isNew = false,
                             name = agent.name,
                             workingDirectory = agent.workingDirectory,
+                            instructions = agent.instructions,
                         )
                     }
                 }
@@ -50,6 +51,10 @@ class AgentEditViewModel(
         state.update { copy(workingDirectory = dir) }
     }
 
+    fun onInstructionsChanged(instructions: String) {
+        state.update { copy(instructions = instructions) }
+    }
+
     @OptIn(ExperimentalUuidApi::class)
     fun onSave() {
         val currentState = state.value
@@ -62,6 +67,7 @@ class AgentEditViewModel(
                     id = Agent.Id(agentId),
                     name = currentState.name,
                     workingDirectory = currentState.workingDirectory,
+                    instructions = currentState.instructions,
                 )
             )
             navigation.close()

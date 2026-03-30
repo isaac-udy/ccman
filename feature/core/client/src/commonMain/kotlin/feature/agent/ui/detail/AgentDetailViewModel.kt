@@ -9,8 +9,11 @@ import dev.isaacudy.udytils.state.ViewModelState
 import dev.isaacudy.udytils.state.viewModelState
 import feature.agent.domain.Agent
 import feature.agent.domain.AgentOutput
+import feature.agent.domain.AgentTask
+import kotlin.time.Clock
 import feature.agent.domain.FlowOfAgentOutput
 import feature.agent.domain.FlowOfAgentState
+import feature.agent.domain.FlowOfAgentTasks
 import feature.agent.domain.FlowOfAgents
 import feature.agent.domain.SendAgentTask
 import feature.agent.domain.StopAgentTask
@@ -21,6 +24,7 @@ class AgentDetailViewModel(
     private val flowOfAgents: FlowOfAgents,
     private val flowOfAgentState: FlowOfAgentState,
     private val flowOfAgentOutput: FlowOfAgentOutput,
+    private val flowOfAgentTasks: FlowOfAgentTasks,
     private val sendAgentTask: SendAgentTask,
     private val stopAgentTask: StopAgentTask,
 ) : ViewModel() {
@@ -45,7 +49,17 @@ class AgentDetailViewModel(
         }
         viewModelScope.launch {
             flowOfAgentOutput(agentId).collect { output ->
-                state.update { copy(output = deduplicateOutput(output)) }
+                val currentTask = state.value.currentTask
+                if (currentTask != null) {
+                    state.update {
+                        copy(currentTask = currentTask.copy(output = deduplicateOutput(output)))
+                    }
+                }
+            }
+        }
+        viewModelScope.launch {
+            flowOfAgentTasks(agentId).collect { tasks ->
+                state.update { copy(taskHistory = tasks) }
             }
         }
     }
@@ -57,15 +71,30 @@ class AgentDetailViewModel(
     fun onSendTask() {
         val prompt = state.value.currentPrompt.trim()
         if (prompt.isEmpty()) return
-        state.update { copy(currentPrompt = "") }
+        state.update {
+            copy(
+                currentPrompt = "",
+                currentTask = AgentTask(
+                    id = AgentTask.Id("pending"),
+                    agentId = agentId,
+                    prompt = prompt,
+                    output = emptyList(),
+                    status = AgentTask.Status.Running,
+                    startedAt = Clock.System.now().toString(),
+                    completedAt = null,
+                ),
+            )
+        }
         viewModelScope.launch {
             sendAgentTask(agentId, prompt)
+            state.update { copy(currentTask = null) }
         }
     }
 
     fun onStopTask() {
         viewModelScope.launch {
             stopAgentTask(agentId)
+            state.update { copy(currentTask = null) }
         }
     }
 

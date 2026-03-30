@@ -4,4 +4,5 @@ data class AgentEditState(
     val isNew: Boolean = true,
     val name: String = "",
     val workingDirectory: String = "",
+    val instructions: String = "",
 )

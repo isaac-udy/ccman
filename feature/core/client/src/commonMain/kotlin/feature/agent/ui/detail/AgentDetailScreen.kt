@@ -1,7 +1,6 @@
 package feature.agent.ui.detail
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
@@ -19,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,11 +33,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.enro.annotations.NavigationDestination
 import feature.agent.domain.AgentOutput
 import feature.agent.domain.AgentStatus
-import androidx.lifecycle.viewmodel.compose.viewModel
+import feature.agent.domain.AgentTask
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,9 +48,10 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
     val listState = rememberLazyListState()
 
-    LaunchedEffect(state.output.size) {
-        if (state.output.isNotEmpty()) {
-            listState.animateScrollToItem(state.output.size - 1)
+    LaunchedEffect(state.currentTask?.output?.size) {
+        val totalItems = listState.layoutInfo.totalItemsCount
+        if (totalItems > 0) {
+            listState.animateScrollToItem(totalItems - 1)
         }
     }
 
@@ -97,47 +101,174 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
                 )
             }
 
-            SelectionContainer {
+            SelectionContainer(modifier = Modifier.weight(1f)) {
                 LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    val visibleOutput = if (state.showFullOutput) {
-                        state.output
-                    } else {
-                        state.output.filter { it is AgentOutput.Text || it is AgentOutput.Result }
+                    // Task history
+                    if (state.taskHistory.isNotEmpty()) {
+                        item(key = "history-header") {
+                            Text(
+                                text = "Task History",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.padding(vertical = 8.dp),
+                            )
+                        }
+                        items(state.taskHistory, key = { "history-${it.id.value}" }) { task ->
+                            TaskHistoryCard(task = task, showFullOutput = state.showFullOutput)
+                        }
+                        item(key = "history-divider") {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        }
                     }
-                    items(visibleOutput) { output ->
-                        OutputItem(output, showRawJson = state.showFullOutput)
+
+                    // Current task
+                    val currentTask = state.currentTask
+                    if (currentTask != null) {
+                        item(key = "current-prompt") {
+                            PromptCard(prompt = currentTask.prompt)
+                        }
+                        val output = currentTask.output
+                        items(output.size, key = { "current-output-$it" }) { index ->
+                            OutputItem(output[index], showRawJson = state.showFullOutput)
+                        }
+                    }
+
+                    // Input row
+                    item(key = "input") {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedTextField(
+                                value = state.currentPrompt,
+                                onValueChange = viewModel::onPromptChanged,
+                                modifier = Modifier.weight(1f),
+                                placeholder = { Text("Enter a task...") },
+                                enabled = state.status !is AgentStatus.Running,
+                                singleLine = false,
+                                maxLines = 5,
+                            )
+                            if (state.status is AgentStatus.Running) {
+                                IconButton(onClick = viewModel::onStopTask) {
+                                    Icon(Icons.Default.Stop, contentDescription = "Stop")
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = viewModel::onSendTask,
+                                    enabled = state.currentPrompt.isNotBlank(),
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = "Send")
+                                }
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
 
+@Composable
+private fun PromptCard(prompt: String) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Text(
+                text = "Prompt",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = prompt,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TaskHistoryCard(task: AgentTask, showFullOutput: Boolean) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedTextField(
-                    value = state.currentPrompt,
-                    onValueChange = viewModel::onPromptChanged,
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Enter a task...") },
-                    enabled = state.status !is AgentStatus.Running,
-                    singleLine = false,
-                    maxLines = 3,
+                Text(
+                    text = when (task.status) {
+                        AgentTask.Status.Completed -> "Completed"
+                        AgentTask.Status.Error -> "Error"
+                        AgentTask.Status.Running -> "Running"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when (task.status) {
+                        AgentTask.Status.Completed -> MaterialTheme.colorScheme.primary
+                        AgentTask.Status.Error -> MaterialTheme.colorScheme.error
+                        AgentTask.Status.Running -> MaterialTheme.colorScheme.tertiary
+                    },
+                    fontWeight = FontWeight.Bold,
                 )
-                if (state.status is AgentStatus.Running) {
-                    IconButton(onClick = viewModel::onStopTask) {
-                        Icon(Icons.Default.Stop, contentDescription = "Stop")
-                    }
-                } else {
-                    IconButton(
-                        onClick = viewModel::onSendTask,
-                        enabled = state.currentPrompt.isNotBlank(),
+                Text(
+                    text = task.startedAt.substringBefore("T").let { date ->
+                        val time = task.startedAt.substringAfter("T").substringBefore(".").take(5)
+                        "$date $time"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = task.prompt,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(8.dp),
+                    maxLines = if (showFullOutput) Int.MAX_VALUE else 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val resultText = task.output
+                .filterIsInstance<AgentOutput.Text>()
+                .lastOrNull()
+                ?: task.output.filterIsInstance<AgentOutput.Result>().lastOrNull()
+            if (resultText != null) {
+                val content = when (resultText) {
+                    is AgentOutput.Text -> resultText.content
+                    is AgentOutput.Result -> resultText.content
+                    else -> ""
+                }
+                if (content.isNotBlank()) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Send")
+                        AgentOutputMarkdown(
+                            content = content,
+                            modifier = Modifier.padding(8.dp),
+                        )
                     }
                 }
             }

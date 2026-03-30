@@ -64,6 +64,17 @@ fun AgentEditScreen(viewModel: AgentEditViewModel = viewModel()) {
                 singleLine = true,
             )
 
+            OutlinedTextField(
+                value = state.instructions,
+                onValueChange = viewModel::onInstructionsChanged,
+                label = { Text("Instructions (optional)") },
+                placeholder = { Text("Instructions to include with every task sent to this agent...") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = false,
+                minLines = 3,
+                maxLines = 8,
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = androidx.compose.ui.Alignment.End),

@@ -8,6 +8,7 @@ data class Agent(
     val id: Id,
     val name: String,
     val workingDirectory: String,
+    val instructions: String = "",
 ) {
     @Serializable
     @JvmInline

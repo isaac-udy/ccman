@@ -7,4 +7,5 @@ data class AgentConfigEntity(
     val id: String,
     val name: String,
     val workingDirectory: String,
+    val instructions: String = "",
 )

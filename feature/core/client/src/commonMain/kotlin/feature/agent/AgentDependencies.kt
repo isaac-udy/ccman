@@ -2,10 +2,12 @@ package feature.agent
 
 import feature.agent.data.AgentRepository
 import feature.agent.data.storage.AgentConfigStorage
+import feature.agent.data.storage.AgentTaskStorage
 import feature.agent.data.storage.ClaudeProcessStorage
 import feature.agent.domain.DeleteAgent
 import feature.agent.domain.FlowOfAgentOutput
 import feature.agent.domain.FlowOfAgentState
+import feature.agent.domain.FlowOfAgentTasks
 import feature.agent.domain.FlowOfAgents
 import feature.agent.domain.SaveAgent
 import feature.agent.domain.SendAgentTask
@@ -19,6 +21,7 @@ import org.koin.dsl.module
 
 val agentDependencies = module {
     singleOf(::AgentConfigStorage)
+    singleOf(::AgentTaskStorage)
     singleOf(::ClaudeProcessStorage)
     singleOf(::AgentRepository)
 
@@ -27,6 +30,7 @@ val agentDependencies = module {
     single<DeleteAgent> { get<AgentRepository>().deleteAgent }
     single<FlowOfAgentState> { get<AgentRepository>().flowOfAgentState }
     single<FlowOfAgentOutput> { get<AgentRepository>().flowOfAgentOutput }
+    single<FlowOfAgentTasks> { get<AgentRepository>().flowOfAgentTasks }
     single<SendAgentTask> { get<AgentRepository>().sendAgentTask }
     single<StopAgentTask> { get<AgentRepository>().stopAgentTask }
 

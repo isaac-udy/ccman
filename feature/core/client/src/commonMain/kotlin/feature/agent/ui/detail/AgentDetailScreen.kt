@@ -248,27 +248,33 @@ private fun TaskHistoryCard(task: AgentTask, showFullOutput: Boolean) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            val resultText = task.output
-                .filterIsInstance<AgentOutput.Text>()
-                .lastOrNull()
-                ?: task.output.filterIsInstance<AgentOutput.Result>().lastOrNull()
-            if (resultText != null) {
-                val content = when (resultText) {
-                    is AgentOutput.Text -> resultText.content
-                    is AgentOutput.Result -> resultText.content
-                    else -> ""
+            if (showFullOutput) {
+                task.output.forEach { output ->
+                    OutputItem(output, showRawJson = true)
                 }
-                if (content.isNotBlank()) {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        AgentOutputMarkdown(
-                            content = content,
-                            modifier = Modifier.padding(8.dp),
-                        )
+            } else {
+                val resultText = task.output
+                    .filterIsInstance<AgentOutput.Text>()
+                    .lastOrNull()
+                    ?: task.output.filterIsInstance<AgentOutput.Result>().lastOrNull()
+                if (resultText != null) {
+                    val content = when (resultText) {
+                        is AgentOutput.Text -> resultText.content
+                        is AgentOutput.Result -> resultText.content
+                        else -> ""
+                    }
+                    if (content.isNotBlank()) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            AgentOutputMarkdown(
+                                content = content,
+                                modifier = Modifier.padding(8.dp),
+                            )
+                        }
                     }
                 }
             }

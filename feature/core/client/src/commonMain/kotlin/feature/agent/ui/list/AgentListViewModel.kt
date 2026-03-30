@@ -45,7 +45,13 @@ class AgentListViewModel(
                     ) { entries -> entries.toList() }
                 }
             }.collect { entries ->
-                state.update { copy(agents = entries) }
+                val grouped = entries
+                    .groupBy { it.agent.group.ifBlank { "Ungrouped" } }
+                    .map { (groupName, groupEntries) ->
+                        AgentListState.AgentGroup(name = groupName, agents = groupEntries)
+                    }
+                    .sortedBy { if (it.name == "Ungrouped") "\uFFFF" else it.name }
+                state.update { copy(groups = grouped) }
             }
         }
     }

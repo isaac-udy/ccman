@@ -5,6 +5,7 @@ import feature.agent.data.storage.AgentConfigStorage
 import feature.agent.data.storage.AgentTaskEntity
 import feature.agent.data.storage.AgentTaskStorage
 import feature.agent.data.storage.ClaudeProcessStorage
+import feature.agent.data.storage.resolveGitGroup
 import feature.agent.domain.Agent
 import feature.agent.domain.AgentOutput
 import feature.agent.domain.AgentStatus
@@ -52,7 +53,8 @@ internal class AgentRepository(
     }
 
     val saveAgent = SaveAgent { agent ->
-        agentConfigStorage.save(agent.toEntity())
+        val group = resolveGitGroup(agent.workingDirectory)
+        agentConfigStorage.save(agent.copy(group = group).toEntity())
     }
 
     val deleteAgent = DeleteAgent { id ->
@@ -156,6 +158,7 @@ internal class AgentRepository(
 private fun AgentConfigEntity.toAgent(): Agent = Agent(
     id = Agent.Id(id),
     name = name,
+    group = group,
     workingDirectory = workingDirectory,
     instructions = instructions,
 )
@@ -163,6 +166,7 @@ private fun AgentConfigEntity.toAgent(): Agent = Agent(
 private fun Agent.toEntity(): AgentConfigEntity = AgentConfigEntity(
     id = id.value,
     name = name,
+    group = group,
     workingDirectory = workingDirectory,
     instructions = instructions,
 )

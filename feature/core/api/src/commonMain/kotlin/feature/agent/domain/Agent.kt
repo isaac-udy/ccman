@@ -7,6 +7,7 @@ import kotlin.jvm.JvmInline
 data class Agent(
     val id: Id,
     val name: String,
+    val group: String = "",
     val workingDirectory: String,
     val instructions: String = "",
 ) {

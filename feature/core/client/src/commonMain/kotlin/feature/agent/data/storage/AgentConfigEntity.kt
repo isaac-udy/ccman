@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 data class AgentConfigEntity(
     val id: String,
     val name: String,
+    val group: String = "",
     val workingDirectory: String,
     val instructions: String = "",
 )

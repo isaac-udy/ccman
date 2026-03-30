@@ -29,10 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.enro.annotations.NavigationDestination
 import feature.agent.domain.Agent
 import feature.agent.domain.AgentStatus
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +50,7 @@ fun AgentListScreen(viewModel: AgentListViewModel = viewModel()) {
             }
         }
     ) { padding ->
-        if (state.agents.isEmpty()) {
+        if (state.groups.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center,
@@ -67,11 +67,21 @@ fun AgentListScreen(viewModel: AgentListViewModel = viewModel()) {
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(state.agents, key = { it.agent.id.value }) { entry ->
-                    AgentCard(
-                        entry = entry,
-                        onClick = { viewModel.onAgentSelected(entry.agent.id) },
-                    )
+                state.groups.forEach { group ->
+                    item(key = "group-header-${group.name}") {
+                        Text(
+                            text = group.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(group.agents, key = { it.agent.id.value }) { entry ->
+                        AgentCard(
+                            entry = entry,
+                            onClick = { viewModel.onAgentSelected(entry.agent.id) },
+                        )
+                    }
                 }
             }
         }

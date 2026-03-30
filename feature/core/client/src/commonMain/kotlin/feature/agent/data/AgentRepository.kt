@@ -11,10 +11,10 @@ import feature.agent.domain.AgentOutput
 import feature.agent.domain.AgentStatus
 import feature.agent.domain.AgentTask
 import feature.agent.domain.DeleteAgent
-import feature.agent.domain.FlowOfAgentOutput
 import feature.agent.domain.FlowOfAgentState
 import feature.agent.domain.FlowOfAgentTasks
 import feature.agent.domain.FlowOfAgents
+import feature.agent.domain.FlowOfCurrentTask
 import feature.agent.domain.SaveAgent
 import feature.agent.domain.SendAgentTask
 import feature.agent.domain.StopAgentTask
@@ -65,8 +65,8 @@ internal class AgentRepository(
         agentStatuses.map { it[agentId] ?: AgentStatus.Idle }
     }
 
-    val flowOfAgentOutput = FlowOfAgentOutput { agentId ->
-        currentTasks.map { it[agentId]?.output ?: emptyList() }
+    val flowOfCurrentTask = FlowOfCurrentTask { agentId ->
+        currentTasks.map { it[agentId] }
     }
 
     val flowOfAgentTasks = FlowOfAgentTasks { agentId ->

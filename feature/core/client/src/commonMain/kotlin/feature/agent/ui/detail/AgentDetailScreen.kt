@@ -40,6 +40,7 @@ import dev.enro.annotations.NavigationDestination
 import feature.agent.domain.AgentOutput
 import feature.agent.domain.AgentStatus
 import feature.agent.domain.AgentTask
+import kotlin.time.Instant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +84,7 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
                 Text(
                     text = when (state.status) {
                         is AgentStatus.Idle -> "Idle"
-                        is AgentStatus.Running -> "Running"
+                        is AgentStatus.Running -> "Running - ${formatDuration(state.elapsedSeconds)}"
                         is AgentStatus.Error -> "Error: ${(state.status as AgentStatus.Error).message}"
                     },
                     style = MaterialTheme.typography.labelMedium,
@@ -127,10 +128,28 @@ fun AgentDetailScreen(viewModel: AgentDetailViewModel = viewModel()) {
                     // Current task
                     val currentTask = state.currentTask
                     if (currentTask != null) {
+                        item(key = "current-header") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Running (${formatDuration(state.elapsedSeconds)})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
                         item(key = "current-prompt") {
                             PromptCard(prompt = currentTask.prompt)
                         }
-                        val output = currentTask.output
+                        val output = if (state.showFullOutput) {
+                            currentTask.output
+                        } else {
+                            currentTask.output.filter { it is AgentOutput.Text || it is AgentOutput.Result }
+                        }
                         items(output.size, key = { "current-output-$it" }) { index ->
                             OutputItem(output[index], showRawJson = state.showFullOutput)
                         }
@@ -211,10 +230,18 @@ private fun TaskHistoryCard(task: AgentTask, showFullOutput: Boolean) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = when (task.status) {
-                        AgentTask.Status.Completed -> "Completed"
-                        AgentTask.Status.Error -> "Error"
-                        AgentTask.Status.Running -> "Running"
+                    text = buildString {
+                        append(
+                            when (task.status) {
+                                AgentTask.Status.Completed -> "Completed"
+                                AgentTask.Status.Error -> "Error"
+                                AgentTask.Status.Running -> "Running"
+                            }
+                        )
+                        val duration = taskDuration(task)
+                        if (duration != null) {
+                            append(" (${formatDuration(duration)})")
+                        }
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = when (task.status) {
@@ -418,4 +445,29 @@ private fun OutputItemContent(output: AgentOutput) {
             }
         }
     }
+}
+
+private fun formatDuration(seconds: Long): String {
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return if (h > 0) {
+        "%d:%02d:%02d".format(h, m, s)
+    } else {
+        "%d:%02d".format(m, s)
+    }
+}
+
+private fun taskDuration(task: AgentTask): Long? {
+    val startedAt = try {
+        Instant.parse(task.startedAt)
+    } catch (_: Throwable) {
+        return null
+    }
+    val completedAt = try {
+        task.completedAt?.let { Instant.parse(it) }
+    } catch (_: Throwable) {
+        null
+    } ?: return null
+    return (completedAt - startedAt).inWholeSeconds
 }

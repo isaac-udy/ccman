@@ -10,20 +10,22 @@ import dev.isaacudy.udytils.state.viewModelState
 import feature.agent.domain.Agent
 import feature.agent.domain.AgentOutput
 import feature.agent.domain.AgentTask
-import kotlin.time.Clock
-import feature.agent.domain.FlowOfAgentOutput
 import feature.agent.domain.FlowOfAgentState
 import feature.agent.domain.FlowOfAgentTasks
 import feature.agent.domain.FlowOfAgents
+import feature.agent.domain.FlowOfCurrentTask
 import feature.agent.domain.SendAgentTask
 import feature.agent.domain.StopAgentTask
 import feature.agent.ui.edit.AgentEditDestination
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class AgentDetailViewModel(
     private val flowOfAgents: FlowOfAgents,
     private val flowOfAgentState: FlowOfAgentState,
-    private val flowOfAgentOutput: FlowOfAgentOutput,
+    private val flowOfCurrentTask: FlowOfCurrentTask,
     private val flowOfAgentTasks: FlowOfAgentTasks,
     private val sendAgentTask: SendAgentTask,
     private val stopAgentTask: StopAgentTask,
@@ -48,18 +50,30 @@ class AgentDetailViewModel(
             }
         }
         viewModelScope.launch {
-            flowOfAgentOutput(agentId).collect { output ->
-                val currentTask = state.value.currentTask
-                if (currentTask != null) {
-                    state.update {
-                        copy(currentTask = currentTask.copy(output = deduplicateOutput(output)))
-                    }
+            flowOfCurrentTask(agentId).collect { task ->
+                state.update {
+                    copy(currentTask = task?.let {
+                        it.copy(output = deduplicateOutput(it.output))
+                    })
                 }
             }
         }
         viewModelScope.launch {
             flowOfAgentTasks(agentId).collect { tasks ->
                 state.update { copy(taskHistory = tasks) }
+            }
+        }
+        viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                val task = state.value.currentTask ?: continue
+                val startedAt = try {
+                    Instant.parse(task.startedAt)
+                } catch (_: Throwable) {
+                    continue
+                }
+                val elapsed = Clock.System.now() - startedAt
+                state.update { copy(elapsedSeconds = elapsed.inWholeSeconds) }
             }
         }
     }
@@ -71,30 +85,15 @@ class AgentDetailViewModel(
     fun onSendTask() {
         val prompt = state.value.currentPrompt.trim()
         if (prompt.isEmpty()) return
-        state.update {
-            copy(
-                currentPrompt = "",
-                currentTask = AgentTask(
-                    id = AgentTask.Id("pending"),
-                    agentId = agentId,
-                    prompt = prompt,
-                    output = emptyList(),
-                    status = AgentTask.Status.Running,
-                    startedAt = Clock.System.now().toString(),
-                    completedAt = null,
-                ),
-            )
-        }
+        state.update { copy(currentPrompt = "", elapsedSeconds = 0) }
         viewModelScope.launch {
             sendAgentTask(agentId, prompt)
-            state.update { copy(currentTask = null) }
         }
     }
 
     fun onStopTask() {
         viewModelScope.launch {
             stopAgentTask(agentId)
-            state.update { copy(currentTask = null) }
         }
     }
 

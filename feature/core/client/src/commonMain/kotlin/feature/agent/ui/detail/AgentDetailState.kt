@@ -12,4 +12,5 @@ data class AgentDetailState(
     val currentTask: AgentTask? = null,
     val currentPrompt: String = "",
     val showFullOutput: Boolean = false,
+    val elapsedSeconds: Long = 0,
 )

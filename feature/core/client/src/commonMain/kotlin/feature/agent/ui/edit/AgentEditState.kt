@@ -5,4 +5,5 @@ data class AgentEditState(
     val name: String = "",
     val workingDirectory: String = "",
     val instructions: String = "",
+    val showDeleteDialog: Boolean = false,
 )

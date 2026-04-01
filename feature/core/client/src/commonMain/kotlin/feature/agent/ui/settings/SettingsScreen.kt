@@ -180,6 +180,67 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                             Text(if (state.slackConnecting) "Connecting..." else "Connect to Slack")
                         }
                     }
+
+                    OutlinedButton(
+                        onClick = viewModel::onSendTestMessage,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = isConnected,
+                    ) {
+                        Text("Send Test Message to #ccman-test")
+                    }
+                }
+            }
+
+            if (state.slackMessages.isNotEmpty()) {
+                Text(
+                    text = "Incoming Messages",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        state.slackMessages.reversed().forEach { message ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                ),
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                    ) {
+                                        Text(
+                                            text = "Channel: ${message.channelId}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        Text(
+                                            text = message.timestamp
+                                                .substringAfter("T")
+                                                .substringBefore(".")
+                                                .take(8),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    Text(
+                                        text = message.text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

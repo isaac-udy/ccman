@@ -14,9 +14,12 @@ import feature.agent.domain.FlowOfAgents
 import feature.agent.domain.FlowOfCurrentTask
 import feature.agent.domain.FlowOfSlackConfig
 import feature.agent.domain.FlowOfSlackConnectionStatus
+import feature.agent.domain.FlowOfSlackMessages
 import feature.agent.domain.FlowOfSlackQueue
 import feature.agent.domain.SaveSlackConfig
 import feature.agent.domain.SendAgentTask
+import feature.agent.domain.SendSlackTestMessage
+import feature.agent.domain.SlackMessageLog
 import feature.agent.domain.SlackChannelMapping
 import feature.agent.domain.SlackConfig
 import feature.agent.domain.SlackConnectionStatus
@@ -53,6 +56,7 @@ internal class SlackRepository(
     private val connectionStatus = MutableStateFlow<SlackConnectionStatus>(SlackConnectionStatus.Disconnected)
     private val queue = MutableStateFlow<List<SlackQueueEntry>>(emptyList())
     private val channelMappings = MutableStateFlow<List<SlackChannelMapping>>(emptyList())
+    private val messageLog = MutableStateFlow<List<SlackMessageLog>>(emptyList())
 
     val flowOfSlackConfig = FlowOfSlackConfig {
         slackConfigStorage.config().map { entity ->
@@ -73,33 +77,75 @@ internal class SlackRepository(
         doConnect(config.botToken, config.appToken)
     }
 
+    val flowOfSlackMessages = FlowOfSlackMessages { messageLog }
+
+    val sendSlackTestMessage = SendSlackTestMessage {
+        val channels = try {
+            slackServiceStorage.listChannels()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+        val testChannel = channels.firstOrNull { it.name == "ccman-test" }
+        if (testChannel != null) {
+            slackServiceStorage.postMessage(
+                channelId = testChannel.id,
+                text = "Hello from CCMan! This is a test message.",
+                threadTs = null,
+            )
+        } else {
+            val created = slackServiceStorage.createChannel("ccman-test")
+            slackServiceStorage.postMessage(
+                channelId = created.id,
+                text = "Hello from CCMan! This is a test message.",
+                threadTs = null,
+            )
+        }
+    }
+
     val disconnectSlack = DisconnectSlack {
         slackServiceStorage.disconnect()
         connectionStatus.value = SlackConnectionStatus.Disconnected
     }
 
-    private suspend fun doConnect(botToken: String, appToken: String) {
+    private fun doConnect(botToken: String, appToken: String) {
         connectionStatus.value = SlackConnectionStatus.Connecting
 
-        try {
-            resolveChannelMappings()
-            startIdleAgentMonitor()
+        scope.launch {
+            try {
+                resolveChannelMappings()
+                startIdleAgentMonitor()
 
-            slackServiceStorage.connect(botToken, appToken).collect { message ->
-                connectionStatus.value = SlackConnectionStatus.Connected
-                onSlackMessage(message.channelId, message.threadTs, message.messageTs, message.text)
-            }
-
-            connectionStatus.value = SlackConnectionStatus.Disconnected
-        } catch (e: Throwable) {
-            e.printStackTrace()
-            connectionStatus.value = SlackConnectionStatus.Error(e.message ?: "Unknown error")
-            scope.launch {
-                delay(5000)
-                try {
-                    doConnect(botToken, appToken)
-                } catch (_: Throwable) {
+                // connect() returns a cold flow; collecting it starts the socket mode connection.
+                // The adapter has a short delay after starting to let the connection establish.
+                slackServiceStorage.connect(botToken, appToken).collect { message ->
+                    if (connectionStatus.value !is SlackConnectionStatus.Connected) {
+                        connectionStatus.value = SlackConnectionStatus.Connected
+                    }
+                    messageLog.update { log ->
+                        log + SlackMessageLog(
+                            channelId = message.channelId,
+                            userId = message.userId,
+                            text = message.text,
+                            timestamp = Clock.System.now().toString(),
+                        )
+                    }
+                    onSlackMessage(message.channelId, message.threadTs, message.messageTs, message.text)
                 }
+
+                connectionStatus.value = SlackConnectionStatus.Disconnected
+            } catch (e: Throwable) {
+                e.printStackTrace()
+                connectionStatus.value = SlackConnectionStatus.Error(e.message ?: "Unknown error")
+                delay(5000)
+                doConnect(botToken, appToken)
+            }
+        }
+
+        // Set connected after a brief delay to allow the socket to establish
+        scope.launch {
+            delay(3000)
+            if (connectionStatus.value is SlackConnectionStatus.Connecting) {
+                connectionStatus.value = SlackConnectionStatus.Connected
             }
         }
     }

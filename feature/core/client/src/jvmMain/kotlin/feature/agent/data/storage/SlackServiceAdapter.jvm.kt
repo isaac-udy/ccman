@@ -5,9 +5,12 @@ import com.slack.api.bolt.App
 import com.slack.api.bolt.AppConfig
 import com.slack.api.bolt.socket_mode.SocketModeApp
 import com.slack.api.model.event.AppMentionEvent
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 actual class SlackServiceStorage actual constructor() {
@@ -15,6 +18,7 @@ actual class SlackServiceStorage actual constructor() {
     private val slack = Slack.getInstance()
     private val socketModeApp = AtomicReference<SocketModeApp?>(null)
     private var botToken: String? = null
+    private val connected = AtomicBoolean(false)
 
     actual fun connect(botToken: String, appToken: String): Flow<SlackMessageEntity> = callbackFlow {
         this@SlackServiceStorage.botToken = botToken
@@ -31,7 +35,7 @@ actual class SlackServiceStorage actual constructor() {
                 .trim()
 
             if (text.isNotBlank()) {
-                trySend(
+                val result = trySend(
                     SlackMessageEntity(
                         channelId = event.channel,
                         threadTs = event.threadTs,
@@ -47,9 +51,22 @@ actual class SlackServiceStorage actual constructor() {
         val sma = SocketModeApp(appToken, app)
         socketModeApp.set(sma)
 
-        sma.startAsync()
+        // start() is blocking — run it on IO dispatcher so callbackFlow stays open
+        launch(Dispatchers.IO) {
+            try {
+                connected.set(true)
+                sma.start()
+            } catch (e: Throwable) {
+                connected.set(false)
+                close(e)
+            }
+        }
+
+        // Give it a moment to establish the connection
+        kotlinx.coroutines.delay(2000)
 
         awaitClose {
+            connected.set(false)
             try {
                 sma.close()
             } catch (_: Throwable) {
@@ -59,13 +76,14 @@ actual class SlackServiceStorage actual constructor() {
     }
 
     actual fun disconnect() {
+        connected.set(false)
         try {
             socketModeApp.getAndSet(null)?.close()
         } catch (_: Throwable) {
         }
     }
 
-    actual fun isConnected(): Boolean = socketModeApp.get() != null
+    actual fun isConnected(): Boolean = connected.get() && socketModeApp.get() != null
 
     actual suspend fun postMessage(channelId: String, text: String, threadTs: String?): String {
         val token = botToken ?: error("Not connected")

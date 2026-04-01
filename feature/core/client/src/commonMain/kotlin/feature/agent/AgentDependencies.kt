@@ -16,7 +16,9 @@ import feature.agent.domain.FlowOfAgents
 import feature.agent.domain.FlowOfCurrentTask
 import feature.agent.domain.FlowOfSlackConfig
 import feature.agent.domain.FlowOfSlackConnectionStatus
+import feature.agent.domain.FlowOfSlackMessages
 import feature.agent.domain.FlowOfSlackQueue
+import feature.agent.domain.SendSlackTestMessage
 import feature.agent.domain.SaveAgent
 import feature.agent.domain.SaveSlackConfig
 import feature.agent.domain.SendAgentTask
@@ -52,6 +54,8 @@ val agentDependencies = module {
     single<SaveSlackConfig> { get<SlackRepository>().saveSlackConfig }
     single<FlowOfSlackConnectionStatus> { get<SlackRepository>().flowOfSlackConnectionStatus }
     single<FlowOfSlackQueue> { get<SlackRepository>().flowOfSlackQueue }
+    single<FlowOfSlackMessages> { get<SlackRepository>().flowOfSlackMessages }
+    single<SendSlackTestMessage> { get<SlackRepository>().sendSlackTestMessage }
     single<ConnectSlack> { get<SlackRepository>().connectSlack }
     single<DisconnectSlack> { get<SlackRepository>().disconnectSlack }
 

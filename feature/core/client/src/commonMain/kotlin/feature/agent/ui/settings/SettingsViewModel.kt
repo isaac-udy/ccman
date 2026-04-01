@@ -10,7 +10,9 @@ import feature.agent.domain.ConnectSlack
 import feature.agent.domain.DisconnectSlack
 import feature.agent.domain.FlowOfSlackConfig
 import feature.agent.domain.FlowOfSlackConnectionStatus
+import feature.agent.domain.FlowOfSlackMessages
 import feature.agent.domain.SaveSlackConfig
+import feature.agent.domain.SendSlackTestMessage
 import feature.agent.domain.SlackConfig
 import feature.agent.domain.SlackConnectionStatus
 import kotlinx.coroutines.launch
@@ -19,6 +21,8 @@ class SettingsViewModel(
     private val flowOfSlackConfig: FlowOfSlackConfig,
     private val saveSlackConfig: SaveSlackConfig,
     private val flowOfSlackConnectionStatus: FlowOfSlackConnectionStatus,
+    private val flowOfSlackMessages: FlowOfSlackMessages,
+    private val sendSlackTestMessage: SendSlackTestMessage,
     private val connectSlack: ConnectSlack,
     private val disconnectSlack: DisconnectSlack,
 ) : ViewModel() {
@@ -49,6 +53,11 @@ class SettingsViewModel(
                         slackConnecting = status is SlackConnectionStatus.Connecting,
                     )
                 }
+            }
+        }
+        viewModelScope.launch {
+            flowOfSlackMessages().collect { messages ->
+                state.update { copy(slackMessages = messages) }
             }
         }
     }
@@ -91,6 +100,15 @@ class SettingsViewModel(
     fun onDisconnectSlack() {
         viewModelScope.launch {
             disconnectSlack()
+        }
+    }
+
+    fun onSendTestMessage() {
+        viewModelScope.launch {
+            try {
+                sendSlackTestMessage()
+            } catch (_: Throwable) {
+            }
         }
     }
 

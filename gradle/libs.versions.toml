@@ -22,7 +22,7 @@ logback = "1.5.24"
 konsist = "0.17.3"
 markdown-renderer = "0.39.2"
 slack-bolt = "1.48.0"
-tyrus = "1.21"
+tyrus = "1.20"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -79,7 +79,7 @@ markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-
 
 slack-bolt-socketMode = { module = "com.slack.api:bolt-socket-mode", version.ref = "slack-bolt" }
 javax-websocket-api = { module = "javax.websocket:javax.websocket-api", version = "1.1" }
-tyrus-standalone-client = { module = "org.glassfish.tyrus:tyrus-standalone-client", version.ref = "tyrus" }
+tyrus-standalone-client = { module = "org.glassfish.tyrus.bundles:tyrus-standalone-client", version.ref = "tyrus" }
 
 enro-core = { module = "dev.enro:enro" }
 enro-common = { module = "dev.enro:enro-common" }

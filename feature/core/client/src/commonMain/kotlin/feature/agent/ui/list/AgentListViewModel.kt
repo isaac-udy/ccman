@@ -13,6 +13,7 @@ import feature.agent.domain.FlowOfAgentState
 import feature.agent.domain.FlowOfAgents
 import feature.agent.ui.detail.AgentDetailDestination
 import feature.agent.ui.edit.AgentEditDestination
+import feature.agent.ui.settings.SettingsDestination
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -62,5 +63,9 @@ class AgentListViewModel(
 
     fun onCreateAgent() {
         navigation.open(AgentEditDestination(agentId = null))
+    }
+
+    fun onOpenSettings() {
+        navigation.open(SettingsDestination)
     }
 }

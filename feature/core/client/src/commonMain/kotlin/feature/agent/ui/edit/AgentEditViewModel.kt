@@ -6,7 +6,6 @@ import dev.enro.close
 import dev.enro.navigationHandle
 import dev.isaacudy.udytils.state.ViewModelState
 import dev.isaacudy.udytils.state.viewModelState
-import feature.agent.data.storage.deleteDirectory
 import feature.agent.domain.Agent
 import feature.agent.domain.DeleteAgent
 import feature.agent.domain.FlowOfAgents
@@ -91,13 +90,9 @@ class AgentEditViewModel(
 
     fun onDeleteConfirmed(alsoDeleteDirectory: Boolean) {
         val agentId = navigation.key.agentId ?: return
-        val workingDirectory = state.value.workingDirectory
         state.update { copy(showDeleteDialog = false) }
         viewModelScope.launch {
-            if (alsoDeleteDirectory) {
-                deleteDirectory(workingDirectory)
-            }
-            deleteAgent(Agent.Id(agentId))
+            deleteAgent(Agent.Id(agentId), alsoDeleteDirectory)
             navigation.close()
         }
     }

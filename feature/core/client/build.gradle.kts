@@ -51,6 +51,7 @@ kotlin {
             implementation(libs.ktor.serverNetty)
             implementation(libs.ktor.clientCore)
             implementation(libs.ktor.clientCio)
+            implementation(libs.slack.bolt.socketMode)
         }
         wasmJsMain.dependencies {
             implementation(libs.kotlinx.browser)

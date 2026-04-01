@@ -5,6 +5,7 @@ import feature.agent.data.storage.AgentConfigStorage
 import feature.agent.data.storage.AgentTaskEntity
 import feature.agent.data.storage.AgentTaskStorage
 import feature.agent.data.storage.ClaudeProcessStorage
+import feature.agent.data.storage.deleteDirectory
 import feature.agent.data.storage.resolveGitGroup
 import feature.agent.domain.Agent
 import feature.agent.domain.AgentOutput
@@ -57,7 +58,14 @@ internal class AgentRepository(
         agentConfigStorage.save(agent.copy(group = group).toEntity())
     }
 
-    val deleteAgent = DeleteAgent { id ->
+    val deleteAgent = DeleteAgent { id, deleteDir ->
+        if (deleteDir) {
+            val agents = agentConfigStorage.agents().first()
+            val agent = agents.firstOrNull { it.id == id.value }
+            if (agent != null) {
+                deleteDirectory(agent.workingDirectory)
+            }
+        }
         agentConfigStorage.delete(id.value)
     }
 

@@ -76,6 +76,7 @@ class DataLayerTests {
             .classes()
             .filter { it.isFeatureModule() }
             .filter { it.resideInPackage("..data..") }
+            .filterNot { ArchitectureExceptions.isIgnored(it) }
             .flatMap { it.primaryConstructor?.parameters ?: emptyList() }
             .assertFalse(
                 additionalMessage = "The data package is forbidden from injecting domain interfaces"

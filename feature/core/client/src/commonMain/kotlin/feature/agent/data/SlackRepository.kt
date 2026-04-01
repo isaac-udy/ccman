@@ -1,5 +1,6 @@
 package feature.agent.data
 
+import feature.agent.data.storage.ChannelBindingEntity
 import feature.agent.data.storage.SlackConfigEntity
 import feature.agent.data.storage.SlackConfigStorage
 import feature.agent.data.storage.SlackServiceStorage
@@ -52,17 +53,36 @@ internal class SlackRepository(
 
     private val connectionStatus = MutableStateFlow<SlackConnectionStatus>(SlackConnectionStatus.Disconnected)
     private val queue = MutableStateFlow<List<SlackQueueEntry>>(emptyList())
-    private val channelMappings = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val channelIdToName = MutableStateFlow<Map<String, String>>(emptyMap()) // channelId -> channelName
+    private val channelNameToGroup = MutableStateFlow<Map<String, String>>(emptyMap()) // channelName -> agentGroup
     private val messageLog = MutableStateFlow<List<SlackMessageLog>>(emptyList())
 
     val flowOfSlackConfig = FlowOfSlackConfig {
         slackConfigStorage.config().map { entity ->
-            entity?.let { SlackConfig(it.botToken, it.appToken, it.enabled) }
+            entity?.let {
+                SlackConfig(
+                    botToken = it.botToken,
+                    appToken = it.appToken,
+                    enabled = it.enabled,
+                    channelBindings = it.channelBindings.map { b ->
+                        SlackConfig.ChannelBinding(b.channelName, b.group)
+                    },
+                )
+            }
         }
     }
 
     val saveSlackConfig = SaveSlackConfig { config ->
-        slackConfigStorage.save(SlackConfigEntity(config.botToken, config.appToken, config.enabled))
+        slackConfigStorage.save(
+            SlackConfigEntity(
+                botToken = config.botToken,
+                appToken = config.appToken,
+                enabled = config.enabled,
+                channelBindings = config.channelBindings.map { b ->
+                    ChannelBindingEntity(b.channelName, b.group)
+                },
+            )
+        )
     }
 
     val flowOfSlackConnectionStatus = FlowOfSlackConnectionStatus { connectionStatus }
@@ -126,13 +146,13 @@ internal class SlackRepository(
                 // connect() returns a cold flow; collecting it starts the socket mode connection.
                 // The adapter has a short delay after starting to let the connection establish.
                 slackServiceStorage.connect(botToken, appToken).collect { message ->
-                    if (!channelMappings.value.containsValue(message.channelId)) {
+                    if (!channelIdToName.value.containsKey(message.channelId)) {
                         resolveChannelMappings()
                     }
                     if (connectionStatus.value !is SlackConnectionStatus.Connected) {
                         connectionStatus.value = SlackConnectionStatus.Connected
                     }
-                    val channelName = channelMappings.value[message.channelId]
+                    val channelName = channelIdToName.value[message.channelId]
                         ?: message.channelId
 
                     messageLog.update { log ->
@@ -166,17 +186,21 @@ internal class SlackRepository(
     }
 
     private suspend fun resolveChannelMappings() {
-        val agents = flowOfAgents().first()
+        val config = slackConfigStorage.config().first()
+        val bindings = config?.channelBindings ?: emptyList()
+        channelNameToGroup.value = bindings.associate { it.channelName to it.group }
+
         val existingChannels = try {
             slackServiceStorage.listChannels()
-        } catch (t: Throwable) {
+        } catch (_: Throwable) {
             emptyList()
         }
-        channelMappings.value = existingChannels.associate { it.id to it.name }
+        channelIdToName.value = existingChannels.associate { it.id to it.name }
     }
 
     private fun onSlackMessage(channelId: String, threadTs: String?, messageTs: String, text: String) {
-        val channelName = channelMappings.value[channelId] ?: return
+        val channelName = channelIdToName.value[channelId] ?: channelId
+        val group = channelNameToGroup.value[channelName] ?: return // no binding configured, ignore
         val entry = SlackQueueEntry(
             id = SlackQueueEntry.Id(Uuid.random().toString()),
             channelId = channelId,
@@ -197,7 +221,8 @@ internal class SlackRepository(
             .firstOrNull { it.channelName == channelName && it.status == SlackQueueEntry.Status.Queued }
             ?: return
 
-        val agents = flowOfAgents().first().filter { it.group == channelName }
+        val group = channelNameToGroup.value[channelName] ?: return
+        val agents = flowOfAgents().first().filter { it.group == group }
         val idleAgent = agents.firstOrNull { agent ->
             flowOfAgentState(agent.id).first() is AgentStatus.Idle
         } ?: return
@@ -317,11 +342,17 @@ internal class SlackRepository(
             }.collect { agentStates ->
                 for ((agent, status) in agentStates) {
                     if (status is AgentStatus.Idle && agent.group.isNotBlank()) {
-                        val hasQueued = queue.value.any {
-                            it.channelName == agent.group && it.status == SlackQueueEntry.Status.Queued
-                        }
-                        if (hasQueued) {
-                            tryDispatchNext(agent.group)
+                        // Find channel names bound to this agent's group
+                        val boundChannelNames = channelNameToGroup.value
+                            .filter { (_, group) -> group == agent.group }
+                            .keys
+                        for (channelName in boundChannelNames) {
+                            val hasQueued = queue.value.any {
+                                it.channelName == channelName && it.status == SlackQueueEntry.Status.Queued
+                            }
+                            if (hasQueued) {
+                                tryDispatchNext(channelName)
+                            }
                         }
                     }
                 }

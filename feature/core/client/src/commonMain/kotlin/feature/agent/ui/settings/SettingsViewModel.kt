@@ -8,6 +8,7 @@ import dev.isaacudy.udytils.state.ViewModelState
 import dev.isaacudy.udytils.state.viewModelState
 import feature.agent.domain.ConnectSlack
 import feature.agent.domain.DisconnectSlack
+import feature.agent.domain.FlowOfAgents
 import feature.agent.domain.FlowOfSlackConfig
 import feature.agent.domain.FlowOfSlackConnectionStatus
 import feature.agent.domain.FlowOfSlackMessages
@@ -22,6 +23,7 @@ class SettingsViewModel(
     private val saveSlackConfig: SaveSlackConfig,
     private val flowOfSlackConnectionStatus: FlowOfSlackConnectionStatus,
     private val flowOfSlackMessages: FlowOfSlackMessages,
+    private val flowOfAgents: FlowOfAgents,
     private val sendSlackTestMessage: SendSlackTestMessage,
     private val connectSlack: ConnectSlack,
     private val disconnectSlack: DisconnectSlack,
@@ -40,6 +42,9 @@ class SettingsViewModel(
                             slackBotToken = config.botToken,
                             slackAppToken = config.appToken,
                             slackEnabled = config.enabled,
+                            channelBindings = config.channelBindings.map {
+                                SettingsState.ChannelBindingEntry(it.channelName, it.group)
+                            },
                         )
                     }
                 }
@@ -60,6 +65,12 @@ class SettingsViewModel(
                 state.update { copy(slackMessages = messages) }
             }
         }
+        viewModelScope.launch {
+            flowOfAgents().collect { agents ->
+                val groups = agents.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()
+                state.update { copy(availableGroups = groups) }
+            }
+        }
     }
 
     fun onSlackBotTokenChanged(token: String) {
@@ -74,7 +85,42 @@ class SettingsViewModel(
         state.update { copy(slackEnabled = enabled) }
     }
 
+    fun onNewBindingChannelChanged(channel: String) {
+        state.update { copy(newBindingChannel = channel) }
+    }
+
+    fun onNewBindingGroupChanged(group: String) {
+        state.update { copy(newBindingGroup = group) }
+    }
+
+    fun onAddBinding() {
+        val current = state.value
+        if (current.newBindingChannel.isBlank() || current.newBindingGroup.isBlank()) return
+        state.update {
+            copy(
+                channelBindings = channelBindings + SettingsState.ChannelBindingEntry(
+                    channelName = current.newBindingChannel.trim(),
+                    group = current.newBindingGroup.trim(),
+                ),
+                newBindingChannel = "",
+                newBindingGroup = "",
+            )
+        }
+        saveCurrentConfig()
+    }
+
+    fun onRemoveBinding(index: Int) {
+        state.update {
+            copy(channelBindings = channelBindings.filterIndexed { i, _ -> i != index })
+        }
+        saveCurrentConfig()
+    }
+
     fun onSaveSlackConfig() {
+        saveCurrentConfig()
+    }
+
+    private fun saveCurrentConfig() {
         val currentState = state.value
         viewModelScope.launch {
             saveSlackConfig(
@@ -82,13 +128,16 @@ class SettingsViewModel(
                     botToken = currentState.slackBotToken,
                     appToken = currentState.slackAppToken,
                     enabled = currentState.slackEnabled,
+                    channelBindings = currentState.channelBindings.map {
+                        SlackConfig.ChannelBinding(it.channelName, it.group)
+                    },
                 )
             )
         }
     }
 
     fun onConnectSlack() {
-        onSaveSlackConfig()
+        saveCurrentConfig()
         viewModelScope.launch {
             try {
                 connectSlack()

@@ -12,6 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -187,6 +189,97 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                         enabled = isConnected,
                     ) {
                         Text("Send Test Message to #ccman-test")
+                    }
+                }
+            }
+
+            Text(
+                text = "Channel Bindings",
+                style = MaterialTheme.typography.titleMedium,
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "Map Slack channels to agent groups",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    state.channelBindings.forEachIndexed { index, binding ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "#${binding.channelName}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = binding.group,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(onClick = { viewModel.onRemoveBinding(index) }) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = state.newBindingChannel,
+                            onValueChange = viewModel::onNewBindingChannelChanged,
+                            label = { Text("Channel name") },
+                            placeholder = { Text("e.g., ccman-test") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = state.newBindingGroup,
+                            onValueChange = viewModel::onNewBindingGroupChanged,
+                            label = { Text("Agent group") },
+                            placeholder = {
+                                Text(state.availableGroups.firstOrNull() ?: "e.g., owner/repo")
+                            },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                        )
+                        IconButton(
+                            onClick = viewModel::onAddBinding,
+                            enabled = state.newBindingChannel.isNotBlank() && state.newBindingGroup.isNotBlank(),
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Add binding")
+                        }
+                    }
+
+                    if (state.availableGroups.isNotEmpty()) {
+                        Text(
+                            text = "Available groups: ${state.availableGroups.joinToString(", ")}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

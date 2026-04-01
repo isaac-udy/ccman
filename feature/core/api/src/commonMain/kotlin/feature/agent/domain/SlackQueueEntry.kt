@@ -7,9 +7,9 @@ import kotlin.jvm.JvmInline
 data class SlackQueueEntry(
     val id: Id,
     val channelId: String,
+    val channelName: String,
     val threadTs: String,
     val messageTs: String,
-    val group: String,
     val prompt: String,
     val status: Status,
     val agentId: Agent.Id? = null,

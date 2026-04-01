@@ -1,13 +1,10 @@
 package feature.agent.data
 
-import androidx.lifecycle.viewModelScope
 import feature.agent.data.storage.SlackConfigEntity
 import feature.agent.data.storage.SlackConfigStorage
 import feature.agent.data.storage.SlackServiceStorage
 import feature.agent.domain.Agent
-import feature.agent.domain.AgentOutput
 import feature.agent.domain.AgentStatus
-import feature.agent.domain.AgentTask
 import feature.agent.domain.ConnectSlack
 import feature.agent.domain.DisconnectSlack
 import feature.agent.domain.FlowOfAgentState
@@ -21,7 +18,6 @@ import feature.agent.domain.SaveSlackConfig
 import feature.agent.domain.SendAgentTask
 import feature.agent.domain.SendSlackTestMessage
 import feature.agent.domain.SlackMessageLog
-import feature.agent.domain.SlackChannelMapping
 import feature.agent.domain.SlackConfig
 import feature.agent.domain.SlackConnectionStatus
 import feature.agent.domain.SlackQueueEntry
@@ -56,7 +52,7 @@ internal class SlackRepository(
 
     private val connectionStatus = MutableStateFlow<SlackConnectionStatus>(SlackConnectionStatus.Disconnected)
     private val queue = MutableStateFlow<List<SlackQueueEntry>>(emptyList())
-    private val channelMappings = MutableStateFlow<List<SlackChannelMapping>>(emptyList())
+    private val channelMappings = MutableStateFlow<Map<String, String>>(emptyMap())
     private val messageLog = MutableStateFlow<List<SlackMessageLog>>(emptyList())
 
     val flowOfSlackConfig = FlowOfSlackConfig {
@@ -125,18 +121,24 @@ internal class SlackRepository(
 
         scope.launch {
             try {
-                resolveChannelMappings()
                 startIdleAgentMonitor()
 
                 // connect() returns a cold flow; collecting it starts the socket mode connection.
                 // The adapter has a short delay after starting to let the connection establish.
                 slackServiceStorage.connect(botToken, appToken).collect { message ->
+                    if (!channelMappings.value.containsValue(message.channelId)) {
+                        resolveChannelMappings()
+                    }
                     if (connectionStatus.value !is SlackConnectionStatus.Connected) {
                         connectionStatus.value = SlackConnectionStatus.Connected
                     }
+                    val channelName = channelMappings.value[message.channelId]
+                        ?: message.channelId
+
                     messageLog.update { log ->
                         log + SlackMessageLog(
                             channelId = message.channelId,
+                            channelName = channelName,
                             userId = message.userId,
                             text = message.text,
                             timestamp = Clock.System.now().toString(),
@@ -165,58 +167,37 @@ internal class SlackRepository(
 
     private suspend fun resolveChannelMappings() {
         val agents = flowOfAgents().first()
-        val groups = agents.map { it.group }.filter { it.isNotBlank() }.distinct()
         val existingChannels = try {
             slackServiceStorage.listChannels()
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             emptyList()
         }
-
-        val mappings = mutableListOf<SlackChannelMapping>()
-
-        for (group in groups) {
-            val channelName = groupToChannelName(group)
-            val existing = existingChannels.firstOrNull { it.name == channelName }
-            if (existing != null) {
-                mappings.add(SlackChannelMapping(existing.id, existing.name, group))
-            } else {
-                try {
-                    val created = slackServiceStorage.createChannel(channelName)
-                    mappings.add(SlackChannelMapping(created.id, created.name, group))
-                } catch (_: Throwable) {
-                    // Channel creation failed, skip this group
-                }
-            }
-        }
-
-        channelMappings.value = mappings
+        channelMappings.value = existingChannels.associate { it.id to it.name }
     }
 
     private fun onSlackMessage(channelId: String, threadTs: String?, messageTs: String, text: String) {
-        val mapping = channelMappings.value.firstOrNull { it.channelId == channelId } ?: return
-        val group = mapping.group
-
+        val channelName = channelMappings.value[channelId] ?: return
         val entry = SlackQueueEntry(
             id = SlackQueueEntry.Id(Uuid.random().toString()),
             channelId = channelId,
+            channelName = channelName,
             threadTs = threadTs ?: messageTs,
             messageTs = messageTs,
-            group = group,
             prompt = text,
             status = SlackQueueEntry.Status.Queued,
             queuedAt = Clock.System.now().toString(),
         )
 
         queue.update { it + entry }
-        scope.launch { tryDispatchNext(group) }
+        scope.launch { tryDispatchNext(channelName) }
     }
 
-    private suspend fun tryDispatchNext(group: String) {
+    private suspend fun tryDispatchNext(channelName: String) {
         val pendingEntry = queue.value
-            .firstOrNull { it.group == group && it.status == SlackQueueEntry.Status.Queued }
+            .firstOrNull { it.channelName == channelName && it.status == SlackQueueEntry.Status.Queued }
             ?: return
 
-        val agents = flowOfAgents().first().filter { it.group == group }
+        val agents = flowOfAgents().first().filter { it.group == channelName }
         val idleAgent = agents.firstOrNull { agent ->
             flowOfAgentState(agent.id).first() is AgentStatus.Idle
         } ?: return
@@ -288,7 +269,7 @@ internal class SlackRepository(
             }
         }
 
-        tryDispatchNext(entry.group)
+        tryDispatchNext(entry.channelName)
     }
 
     private suspend fun onTaskFailed(entry: SlackQueueEntry, agent: Agent, error: String) {
@@ -321,7 +302,7 @@ internal class SlackRepository(
             }
         }
 
-        tryDispatchNext(entry.group)
+        tryDispatchNext(entry.channelName)
     }
 
     private fun startIdleAgentMonitor() {
@@ -337,7 +318,7 @@ internal class SlackRepository(
                 for ((agent, status) in agentStates) {
                     if (status is AgentStatus.Idle && agent.group.isNotBlank()) {
                         val hasQueued = queue.value.any {
-                            it.group == agent.group && it.status == SlackQueueEntry.Status.Queued
+                            it.channelName == agent.group && it.status == SlackQueueEntry.Status.Queued
                         }
                         if (hasQueued) {
                             tryDispatchNext(agent.group)
@@ -347,10 +328,6 @@ internal class SlackRepository(
             }
         }
     }
-}
-
-private fun groupToChannelName(group: String): String {
-    return "ccman-" + group.lowercase().replace("/", "-").replace(".", "-").take(74)
 }
 
 private fun formatTime(instant: Instant): String {

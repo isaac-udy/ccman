@@ -220,7 +220,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                     ) {
                                         Text(
-                                            text = "Channel: ${message.channelId}",
+                                            text = "#${message.channelName}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )

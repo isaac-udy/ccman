@@ -1,5 +1,6 @@
 package feature.agent.data
 
+import androidx.lifecycle.viewModelScope
 import feature.agent.data.storage.SlackConfigEntity
 import feature.agent.data.storage.SlackConfigStorage
 import feature.agent.data.storage.SlackServiceStorage
@@ -105,6 +106,18 @@ internal class SlackRepository(
     val disconnectSlack = DisconnectSlack {
         slackServiceStorage.disconnect()
         connectionStatus.value = SlackConnectionStatus.Disconnected
+    }
+
+    init {
+        scope.launch {
+            val config = flowOfSlackConfig().first()
+            if (config != null && config.botToken.isNotBlank() && config.appToken.isNotBlank() && config.enabled) {
+                try {
+                    connectSlack()
+                } catch (_: Throwable) {
+                }
+            }
+        }
     }
 
     private fun doConnect(botToken: String, appToken: String) {

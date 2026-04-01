@@ -5,6 +5,7 @@ import feature.agent.domain.AgentStatus
 
 data class AgentListState(
     val groups: List<AgentGroup> = emptyList(),
+    val slackStatus: SlackStatus = SlackStatus.NotConfigured,
 ) {
     data class AgentGroup(
         val name: String,
@@ -15,4 +16,12 @@ data class AgentListState(
         val agent: Agent,
         val status: AgentStatus,
     )
+
+    sealed interface SlackStatus {
+        data object NotConfigured : SlackStatus
+        data object Connecting : SlackStatus
+        data object Connected : SlackStatus
+        data object Disconnected : SlackStatus
+        data class Error(val message: String) : SlackStatus
+    }
 }

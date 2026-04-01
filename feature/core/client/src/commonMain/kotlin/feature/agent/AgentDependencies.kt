@@ -27,6 +27,7 @@ import feature.agent.ui.detail.AgentDetailViewModel
 import feature.agent.ui.edit.AgentEditViewModel
 import feature.agent.ui.list.AgentListViewModel
 import feature.agent.ui.settings.SettingsViewModel
+import feature.agent.ui.slack.SlackDetailViewModel
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
@@ -63,4 +64,5 @@ val agentDependencies = module {
     viewModelOf(::AgentDetailViewModel)
     viewModelOf(::AgentEditViewModel)
     viewModelOf(::SettingsViewModel)
+    viewModelOf(::SlackDetailViewModel)
 }

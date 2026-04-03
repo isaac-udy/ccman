@@ -300,7 +300,7 @@ internal class SlackRepository(
                 append("Completed by ${agent.name} in $durationText")
                 if (resultText.isNotBlank()) {
                     append("\n\n")
-                    append(resultText.take(3000))
+                    append(markdownToSlack(resultText).take(3000))
                 }
             }
             try {
@@ -389,6 +389,47 @@ private fun extractResultText(task: AgentTask): String {
     if (text != null) return text.content
 
     return ""
+}
+
+private fun markdownToSlack(markdown: String): String {
+    var result = markdown
+
+    // Fenced code blocks: ```lang\n...\n``` → ```\n...\n```
+    result = result.replace(Regex("```[a-zA-Z]*\\n"), "```\n")
+
+    // Headers: # Text → *Text*
+    result = result.replace(Regex("(?m)^#{1,6}\\s+(.+)$")) { match ->
+        "*${match.groupValues[1]}*"
+    }
+
+    // Bold: **text** → *text*
+    result = result.replace(Regex("\\*\\*(.+?)\\*\\*"), "*$1*")
+
+    // Italic: _text_ stays the same (Slack uses _text_ too)
+
+    // Strikethrough: ~~text~~ → ~text~
+    result = result.replace(Regex("~~(.+?)~~"), "~$1~")
+
+    // Links: [text](url) → <url|text>
+    result = result.replace(Regex("\\[([^]]+)]\\(([^)]+)\\)")) { match ->
+        "<${match.groupValues[2]}|${match.groupValues[1]}>"
+    }
+
+    // Images: ![alt](url) → <url|alt>
+    result = result.replace(Regex("!\\[([^]]*)]\\(([^)]+)\\)")) { match ->
+        "<${match.groupValues[2]}|${match.groupValues[1]}>"
+    }
+
+    // Unordered list items: - text or * text → • text
+    result = result.replace(Regex("(?m)^\\s*[-*]\\s+")) { "• " }
+
+    // Horizontal rules: --- or *** → ———
+    result = result.replace(Regex("(?m)^(---+|\\*\\*\\*+)$"), "———")
+
+    // Blockquotes: > text → > text (Slack supports this natively with >)
+    // No change needed
+
+    return result
 }
 
 private fun formatTime(instant: Instant): String {

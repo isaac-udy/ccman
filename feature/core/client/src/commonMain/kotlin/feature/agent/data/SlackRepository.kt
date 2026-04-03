@@ -10,12 +10,15 @@ import feature.agent.domain.ConnectSlack
 import feature.agent.domain.DisconnectSlack
 import feature.agent.domain.FlowOfAgentState
 import feature.agent.domain.FlowOfAgents
+import feature.agent.domain.FlowOfAgentTasks
 import feature.agent.domain.FlowOfCurrentTask
 import feature.agent.domain.FlowOfSlackConfig
 import feature.agent.domain.FlowOfSlackConnectionStatus
 import feature.agent.domain.FlowOfSlackMessages
 import feature.agent.domain.FlowOfSlackQueue
 import feature.agent.domain.SaveSlackConfig
+import feature.agent.domain.AgentOutput
+import feature.agent.domain.AgentTask
 import feature.agent.domain.SendAgentTask
 import feature.agent.domain.SendSlackTestMessage
 import feature.agent.domain.SlackMessageLog
@@ -48,6 +51,7 @@ internal class SlackRepository(
     private val flowOfAgentState: FlowOfAgentState,
     private val sendAgentTask: SendAgentTask,
     private val flowOfCurrentTask: FlowOfCurrentTask,
+    private val flowOfAgentTasks: FlowOfAgentTasks,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -229,7 +233,7 @@ internal class SlackRepository(
 
         val now = Clock.System.now()
         val replyTs = try {
-            slackServiceStorage.postMessage(
+              slackServiceStorage.postMessage(
                 channelId = pendingEntry.channelId,
                 text = "Processing started on ${idleAgent.name} at ${formatTime(now)}...",
                 threadTs = pendingEntry.threadTs,
@@ -250,7 +254,17 @@ internal class SlackRepository(
         scope.launch {
             try {
                 sendAgentTask(idleAgent.id, updatedEntry.prompt)
-                onTaskCompleted(updatedEntry, idleAgent)
+
+                // sendAgentTask returns immediately (it launches internally).
+                // First wait for the agent to start running, then wait for it to finish.
+                flowOfAgentState(idleAgent.id).first { it is AgentStatus.Running }
+                val finalStatus = flowOfAgentState(idleAgent.id).first { status ->
+                    status is AgentStatus.Idle || status is AgentStatus.Error
+                }
+                when (finalStatus) {
+                    is AgentStatus.Error -> onTaskFailed(updatedEntry, idleAgent, finalStatus.message)
+                    else -> onTaskCompleted(updatedEntry, idleAgent)
+                }
             } catch (e: Throwable) {
                 onTaskFailed(updatedEntry, idleAgent, e.message ?: "Unknown error")
             }
@@ -258,13 +272,6 @@ internal class SlackRepository(
     }
 
     private suspend fun onTaskCompleted(entry: SlackQueueEntry, agent: Agent) {
-        val tasks = flowOfCurrentTask(agent.id).first()
-        // Task is null because it completed and was cleared — get last completed task info
-        // The result text comes from the task that just finished. Since sendAgentTask is a suspending
-        // call that returns after the task completes, we can look at the persisted task history.
-        // For now, we update the Slack message with a generic completion message.
-        // The actual result can be retrieved by checking the last task's output.
-
         val completedAt = Clock.System.now()
         val startedAt = try {
             Instant.parse(entry.queuedAt)
@@ -276,6 +283,11 @@ internal class SlackRepository(
         val secs = durationSeconds % 60
         val durationText = if (mins > 0) "$mins mins $secs seconds" else "$secs seconds"
 
+        // Get the result text from the last completed task in history
+        val taskHistory = flowOfAgentTasks(agent.id).first()
+        val lastTask = taskHistory.lastOrNull()
+        val resultText = lastTask?.let { extractResultText(it) } ?: ""
+
         queue.update { entries ->
             entries.map {
                 if (it.id == entry.id) it.copy(status = SlackQueueEntry.Status.Completed) else it
@@ -284,11 +296,18 @@ internal class SlackRepository(
 
         val completedReplyTs = entry.replyTs
         if (completedReplyTs != null) {
+            val message = buildString {
+                append("Completed by ${agent.name} in $durationText")
+                if (resultText.isNotBlank()) {
+                    append("\n\n")
+                    append(resultText.take(3000))
+                }
+            }
             try {
                 slackServiceStorage.updateMessage(
                     channelId = entry.channelId,
                     ts = completedReplyTs,
-                    text = "Completed by ${agent.name} in $durationText",
+                    text = message,
                 )
             } catch (_: Throwable) {
             }
@@ -359,6 +378,17 @@ internal class SlackRepository(
             }
         }
     }
+}
+
+private fun extractResultText(task: AgentTask): String {
+    // Prefer Result type, fall back to last Text
+    val result = task.output.filterIsInstance<AgentOutput.Result>().lastOrNull()
+    if (result != null) return result.content
+
+    val text = task.output.filterIsInstance<AgentOutput.Text>().lastOrNull()
+    if (text != null) return text.content
+
+    return ""
 }
 
 private fun formatTime(instant: Instant): String {

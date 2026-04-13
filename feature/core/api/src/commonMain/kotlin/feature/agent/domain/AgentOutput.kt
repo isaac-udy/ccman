@@ -24,7 +24,7 @@ sealed interface AgentOutput {
     data class ToolResult(val name: String, val output: String, override val rawJson: String) : AgentOutput
 
     @Serializable
-    data class Result(val content: String, override val rawJson: String) : AgentOutput
+    data class Result(val content: String, val sessionId: String? = null, override val rawJson: String) : AgentOutput
 
     @Serializable
     data class Unknown(val type: String, override val rawJson: String) : AgentOutput

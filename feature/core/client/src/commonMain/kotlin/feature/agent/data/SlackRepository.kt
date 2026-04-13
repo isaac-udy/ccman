@@ -4,6 +4,10 @@ import feature.agent.data.storage.ChannelBindingEntity
 import feature.agent.data.storage.SlackConfigEntity
 import feature.agent.data.storage.SlackConfigStorage
 import feature.agent.data.storage.SlackServiceStorage
+import feature.agent.data.storage.SlackThreadSessionEntity
+import feature.agent.data.storage.SlackThreadSessionStorage
+import feature.agent.data.storage.gitCheckout
+import feature.agent.data.storage.resolveGitBranch
 import feature.agent.domain.Agent
 import feature.agent.domain.AgentStatus
 import feature.agent.domain.ConnectSlack
@@ -52,6 +56,7 @@ internal class SlackRepository(
     private val sendAgentTask: SendAgentTask,
     private val flowOfCurrentTask: FlowOfCurrentTask,
     private val flowOfAgentTasks: FlowOfAgentTasks,
+    private val slackThreadSessionStorage: SlackThreadSessionStorage,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -227,15 +232,53 @@ internal class SlackRepository(
 
         val group = channelNameToGroup.value[channelName] ?: return
         val agents = flowOfAgents().first().filter { it.group == group }
-        val idleAgent = agents.firstOrNull { agent ->
-            flowOfAgentState(agent.id).first() is AgentStatus.Idle
-        } ?: return
+
+        // Check for existing thread session (conversation continuity)
+        val existingSession = slackThreadSessionStorage.getSession(pendingEntry.threadTs)
+        val resumeSessionId: String?
+        val idleAgent: Agent
+
+        if (existingSession != null) {
+            // Prefer the same agent that handled the previous message in this thread
+            val preferredAgent = agents.firstOrNull { it.id.value == existingSession.agentId }
+            if (preferredAgent != null) {
+                val preferredStatus = flowOfAgentState(preferredAgent.id).first()
+                if (preferredStatus is AgentStatus.Idle) {
+                    idleAgent = preferredAgent
+                    resumeSessionId = existingSession.sessionId
+                } else {
+                    // Preferred agent is busy — wait for it rather than dispatching to another
+                    return
+                }
+            } else {
+                // Preferred agent no longer exists, fall back to any idle agent
+                idleAgent = agents.firstOrNull { agent ->
+                    flowOfAgentState(agent.id).first() is AgentStatus.Idle
+                } ?: return
+                resumeSessionId = null
+            }
+        } else {
+            // No session — first message in thread, dispatch to any idle agent
+            idleAgent = agents.firstOrNull { agent ->
+                flowOfAgentState(agent.id).first() is AgentStatus.Idle
+            } ?: return
+            resumeSessionId = null
+        }
+
+        // Ensure the agent is on the correct branch before resuming
+        if (resumeSessionId != null && existingSession != null && existingSession.branch.isNotBlank()) {
+            val currentBranch = resolveGitBranch(idleAgent.workingDirectory)
+            if (currentBranch != existingSession.branch) {
+                gitCheckout(idleAgent.workingDirectory, existingSession.branch)
+            }
+        }
 
         val now = Clock.System.now()
         val replyTs = try {
-              slackServiceStorage.postMessage(
+            slackServiceStorage.postMessage(
                 channelId = pendingEntry.channelId,
-                text = "Processing started on ${idleAgent.name} at ${formatTime(now)}...",
+                text = "Processing started on ${idleAgent.name} at ${formatTime(now)}..." +
+                    if (resumeSessionId != null) " (resuming conversation)" else "",
                 threadTs = pendingEntry.threadTs,
             )
         } catch (_: Throwable) {
@@ -253,10 +296,8 @@ internal class SlackRepository(
 
         scope.launch {
             try {
-                sendAgentTask(idleAgent.id, updatedEntry.prompt)
+                sendAgentTask(idleAgent.id, updatedEntry.prompt, resumeSessionId)
 
-                // sendAgentTask returns immediately (it launches internally).
-                // First wait for the agent to start running, then wait for it to finish.
                 flowOfAgentState(idleAgent.id).first { it is AgentStatus.Running }
                 val finalStatus = flowOfAgentState(idleAgent.id).first { status ->
                     status is AgentStatus.Idle || status is AgentStatus.Error
@@ -283,10 +324,29 @@ internal class SlackRepository(
         val secs = durationSeconds % 60
         val durationText = if (mins > 0) "$mins mins $secs seconds" else "$secs seconds"
 
-        // Get the result text from the last completed task in history
+        // Get the result text and session ID from the last completed task
         val taskHistory = flowOfAgentTasks(agent.id).first()
         val lastTask = taskHistory.lastOrNull()
         val resultText = lastTask?.let { extractResultText(it) } ?: ""
+
+        // Save thread session for conversation continuity
+        val sessionId = lastTask?.output
+            ?.filterIsInstance<AgentOutput.Result>()
+            ?.lastOrNull()
+            ?.sessionId
+        if (sessionId != null) {
+            val branch = resolveGitBranch(agent.workingDirectory)
+            slackThreadSessionStorage.saveSession(
+                SlackThreadSessionEntity(
+                    threadTs = entry.threadTs,
+                    channelId = entry.channelId,
+                    sessionId = sessionId,
+                    agentId = agent.id.value,
+                    branch = branch,
+                    lastUpdated = Clock.System.now().toString(),
+                )
+            )
+        }
 
         queue.update { entries ->
             entries.map {

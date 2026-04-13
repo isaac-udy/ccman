@@ -26,19 +26,26 @@ actual class ClaudeProcessStorage actual constructor() {
         agentId: String,
         workingDirectory: String,
         prompt: String,
+        sessionId: String?,
     ): Flow<String> = callbackFlow {
         val existingProcess = activeProcesses[agentId]
         if (existingProcess != null && existingProcess.isAlive) {
             existingProcess.destroyForcibly()
         }
 
-        val command = listOf(
-            "claude",
-            "-p", prompt,
-            "--dangerously-skip-permissions",
-            "--output-format", "stream-json",
-            "--verbose",
-        )
+        val command = buildList {
+            add("claude")
+            add("-p")
+            add(prompt)
+            add("--dangerously-skip-permissions")
+            add("--output-format")
+            add("stream-json")
+            add("--verbose")
+            if (sessionId != null) {
+                add("--resume")
+                add(sessionId)
+            }
+        }
 
         val processBuilder = ProcessBuilder(command)
             .directory(File(workingDirectory))

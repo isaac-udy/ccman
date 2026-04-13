@@ -7,6 +7,7 @@ import feature.agent.data.storage.AgentTaskStorage
 import feature.agent.data.storage.ClaudeProcessStorage
 import feature.agent.data.storage.SlackConfigStorage
 import feature.agent.data.storage.SlackServiceStorage
+import feature.agent.data.storage.SlackThreadSessionStorage
 import feature.agent.domain.ConnectSlack
 import feature.agent.domain.DeleteAgent
 import feature.agent.domain.DisconnectSlack
@@ -49,6 +50,7 @@ val agentDependencies = module {
 
     singleOf(::SlackConfigStorage)
     singleOf(::SlackServiceStorage)
+    singleOf(::SlackThreadSessionStorage)
     singleOf(::SlackRepository)
 
     single<FlowOfSlackConfig> { get<SlackRepository>().flowOfSlackConfig }

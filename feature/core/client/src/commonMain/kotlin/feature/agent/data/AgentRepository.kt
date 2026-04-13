@@ -84,7 +84,7 @@ internal class AgentRepository(
     }
 
     @OptIn(ExperimentalUuidApi::class)
-    val sendAgentTask = SendAgentTask { agentId, prompt ->
+    val sendAgentTask = SendAgentTask { agentId, prompt, sessionId ->
         val agents = agentConfigStorage.agents().first()
         val agent = agents.firstOrNull { it.id == agentId.value } ?: return@SendAgentTask
 
@@ -118,6 +118,7 @@ internal class AgentRepository(
                     agentId = agentId.value,
                     workingDirectory = agent.workingDirectory,
                     prompt = fullPrompt,
+                    sessionId = sessionId,
                 ).collect { line ->
                     val events = parseClaudeEvents(line)
                     if (events.isEmpty()) return@collect
@@ -291,5 +292,6 @@ private fun parseToolUseBlock(block: JsonObject): AgentOutput.ToolUse? {
 private fun parseResultMessage(json: JsonObject): List<AgentOutput> {
     val result = json["result"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
     if (result.isBlank()) return emptyList()
-    return listOf(AgentOutput.Result(result, rawJson = json.toString()))
+    val sessionId = json["session_id"]?.jsonPrimitive?.contentOrNull
+    return listOf(AgentOutput.Result(result, sessionId = sessionId, rawJson = json.toString()))
 }

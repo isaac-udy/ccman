@@ -11,6 +11,8 @@ object ArchitectureExceptions {
 
     val functions = listOf(
         "feature.agent.data.storage.resolveGitGroup",
+        "feature.agent.data.storage.resolveGitBranch",
+        "feature.agent.data.storage.gitCheckout",
         "feature.agent.data.storage.deleteDirectory",
     )
 

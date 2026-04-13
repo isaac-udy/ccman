@@ -87,7 +87,7 @@ class AgentDetailViewModel(
         if (prompt.isEmpty()) return
         state.update { copy(currentPrompt = "", elapsedSeconds = 0) }
         viewModelScope.launch {
-            sendAgentTask(agentId, prompt)
+            sendAgentTask(agentId, prompt, null)
         }
     }
 

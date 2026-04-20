@@ -37,6 +37,8 @@ actual class ClaudeProcessStorage actual constructor() {
             add("claude")
             add("-p")
             add(prompt)
+            add("--model")
+            add("claude-opus-4-7[1m]")
             add("--dangerously-skip-permissions")
             add("--output-format")
             add("stream-json")

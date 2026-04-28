@@ -173,7 +173,7 @@ internal class SlackRepository(
                             timestamp = Clock.System.now().toString(),
                         )
                     }
-                    onSlackMessage(message.channelId, message.threadTs, message.messageTs, message.text)
+                    onSlackMessage(message.channelId, message.threadTs, message.messageTs, message.userId, message.text)
                 }
 
                 connectionStatus.value = SlackConnectionStatus.Disconnected
@@ -207,7 +207,7 @@ internal class SlackRepository(
         channelIdToName.value = existingChannels.associate { it.id to it.name }
     }
 
-    private fun onSlackMessage(channelId: String, threadTs: String?, messageTs: String, text: String) {
+    private fun onSlackMessage(channelId: String, threadTs: String?, messageTs: String, userId: String, text: String) {
         val channelName = channelIdToName.value[channelId] ?: channelId
         val group = channelNameToGroup.value[channelName] ?: return // no binding configured, ignore
         val entry = SlackQueueEntry(
@@ -216,6 +216,7 @@ internal class SlackRepository(
             channelName = channelName,
             threadTs = threadTs ?: messageTs,
             messageTs = messageTs,
+            userId = userId,
             prompt = text,
             status = SlackQueueEntry.Status.Queued,
             queuedAt = Clock.System.now().toString(),
@@ -357,6 +358,9 @@ internal class SlackRepository(
         val completedReplyTs = entry.replyTs
         if (completedReplyTs != null) {
             val message = buildString {
+                if (entry.userId.isNotBlank()) {
+                    append("<@${entry.userId}> ")
+                }
                 append("Completed by ${agent.name} in $durationText")
                 if (resultText.isNotBlank()) {
                     append("\n\n")
@@ -396,11 +400,17 @@ internal class SlackRepository(
 
         val errorReplyTs = entry.replyTs
         if (errorReplyTs != null) {
+            val message = buildString {
+                if (entry.userId.isNotBlank()) {
+                    append("<@${entry.userId}> ")
+                }
+                append("Error on ${agent.name} after $durationText: $error")
+            }
             try {
                 slackServiceStorage.updateMessage(
                     channelId = entry.channelId,
                     ts = errorReplyTs,
-                    text = "Error on ${agent.name} after $durationText: $error",
+                    text = message,
                 )
             } catch (_: Throwable) {
             }

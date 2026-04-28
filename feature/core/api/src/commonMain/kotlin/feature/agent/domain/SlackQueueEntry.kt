@@ -10,6 +10,7 @@ data class SlackQueueEntry(
     val channelName: String,
     val threadTs: String,
     val messageTs: String,
+    val userId: String,
     val prompt: String,
     val status: Status,
     val agentId: Agent.Id? = null,

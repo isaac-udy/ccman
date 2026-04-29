@@ -357,14 +357,21 @@ internal class SlackRepository(
 
         val completedReplyTs = entry.replyTs
         if (completedReplyTs != null) {
+            val slackFormatted = if (resultText.isNotBlank()) markdownToSlack(resultText) else ""
+            val responseTooLong = slackFormatted.length > LONG_RESPONSE_THRESHOLD
+
             val message = buildString {
                 if (entry.userId.isNotBlank()) {
                     append("<@${entry.userId}> ")
                 }
                 append("Completed by ${agent.name} in $durationText")
                 if (resultText.isNotBlank()) {
-                    append("\n\n")
-                    append(markdownToSlack(resultText).take(3000))
+                    if (responseTooLong) {
+                        append("\n\n_Response was too long for Slack — full reply attached as a file._")
+                    } else {
+                        append("\n\n")
+                        append(slackFormatted)
+                    }
                 }
             }
             try {
@@ -374,6 +381,19 @@ internal class SlackRepository(
                     text = message,
                 )
             } catch (_: Throwable) {
+            }
+
+            if (responseTooLong) {
+                try {
+                    slackServiceStorage.uploadFile(
+                        channelId = entry.channelId,
+                        threadTs = entry.threadTs,
+                        filename = "response.md",
+                        content = resultText,
+                        initialComment = null,
+                    )
+                } catch (_: Throwable) {
+                }
             }
         }
 
@@ -449,6 +469,8 @@ internal class SlackRepository(
         }
     }
 }
+
+private const val LONG_RESPONSE_THRESHOLD = 3000
 
 private fun extractResultText(task: AgentTask): String {
     // Prefer Result type, fall back to last Text

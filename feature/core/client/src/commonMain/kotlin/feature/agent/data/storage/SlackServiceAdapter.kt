@@ -21,6 +21,7 @@ expect class SlackServiceStorage() {
     fun isConnected(): Boolean
     suspend fun postMessage(channelId: String, text: String, threadTs: String?): String
     suspend fun updateMessage(channelId: String, ts: String, text: String)
+    suspend fun uploadFile(channelId: String, threadTs: String?, filename: String, content: String, initialComment: String?)
     suspend fun listChannels(): List<SlackChannelEntity>
     suspend fun createChannel(name: String): SlackChannelEntity
 }

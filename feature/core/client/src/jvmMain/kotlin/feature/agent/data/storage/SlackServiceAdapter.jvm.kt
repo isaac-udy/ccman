@@ -110,6 +110,26 @@ actual class SlackServiceStorage actual constructor() {
         }
     }
 
+    actual suspend fun uploadFile(
+        channelId: String,
+        threadTs: String?,
+        filename: String,
+        content: String,
+        initialComment: String?,
+    ) {
+        val token = botToken ?: error("Not connected")
+        val response = slack.methods(token).filesUploadV2 { req ->
+            req.channel(channelId)
+                .filename(filename)
+                .content(content)
+                .also { if (threadTs != null) it.threadTs(threadTs) }
+                .also { if (initialComment != null) it.initialComment(initialComment) }
+        }
+        if (!response.isOk) {
+            error("Failed to upload file: ${response.error}")
+        }
+    }
+
     actual suspend fun listChannels(): List<SlackChannelEntity> {
         val token = botToken ?: error("Not connected")
         val response = slack.methods(token).conversationsList { req ->
